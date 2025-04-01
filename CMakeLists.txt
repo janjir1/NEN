@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Initialise pico_sdk from installed location
@@ -39,7 +39,13 @@ add_executable(NEN
     NEN.cpp
     
     # Library executables
+    # MCP2515
     include/mcp2515/mcp2515.cpp
+    # SH1107
+    include/sh1107/sh110x.cpp
+    include/sh1107/display_graphics.cpp
+    include/sh1107/display_print.cpp
+    include/sh1107/display_fonts.cpp
     )
 
 pico_set_program_name(NEN "NEN")
