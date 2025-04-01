@@ -23,9 +23,9 @@ SH110X myOLED(myOLEDwidth ,myOLEDheight) ; // instantiate a OLED object
 
 // I2C settings
 const uint8_t ADDR = 0x3C; // I2C address
-const uint16_t SPEED = 100; // I2C clock speed in kilo hertz
-const uint8_t CLK_PIN = 19;
-const uint8_t DATA_PIN = 18;
+const uint16_t SPEED = 400; // I2C clock speed in kilo hertz
+const uint8_t CLK_PIN = 13;
+const uint8_t DATA_PIN = 12;
 
 // Reset only needed if Hardware reset pin is present on device and used
 int _RESET_PIN = -1; // set to -1 if not used
@@ -52,10 +52,10 @@ int main()
     can0.setBitrate(CAN_1000KBPS, MCP_8MHZ);
     can0.setListenOnlyMode();
 
-    /*
+    
     if(SetupTest()) TestLoop();
-	EndTest();
-    */
+	//EndTest();
+    
 
 
     while (true) {
@@ -70,7 +70,7 @@ bool SetupTest()
 	stdio_init_all(); // Initialize chosen serial port, default 38400 baud
 	busy_wait_ms(500);
 	printf("OLED SH1107 :: Start!\r\n");
-	while(myOLED.OLEDbegin(myOLED.SH1107_IC, _RESET_PIN, ADDR, i2c1, 
+	while(myOLED.OLEDbegin(myOLED.SH1107_IC, _RESET_PIN, ADDR, i2c0, 
 					SPEED, DATA_PIN, CLK_PIN) != DisplayRet::Success)
 	{
 		printf("SetupTest ERROR : Failed to initialize OLED!\r\n");
