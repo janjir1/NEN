@@ -17,3 +17,38 @@ Data is writen in a mutliple of 1 page (256 byte)
 Should try to erase in setup
 
 In 1 sector can be stored 4096 8bit numbers or 1024 32bit numbers
+
+ At runtime, you can determine the end of the program in flash from the intrinsic variable __flash_binary_end (which is a memory address, not an offset in flash)
+
+PICO_FLASH_SIZE_BYTES # The total size of the RP2040 flash, in bytes
+FLASH_SECTOR_SIZE     # The size of one sector, in bytes (the minimum amount you can erase)
+FLASH_PAGE_SIZE       # The size of one page, in bytes (the mimimum amount you can write)
+
+
+flash_range_erase(uint32_t flash_offs, size_t count);
+flash_range_program(uint32_t flash_offs, const uint8_t *data, size_t count);
+
+int buf[FLASH_PAGE_SIZE/sizeof(int)];  // One page worth of 32-bit ints
+int mydata = 123456;  // The data I want to store
+
+buf[0] = mydata;  // Put the data into the first four bytes of buf[]
+
+// Erase the last sector of the flash
+flash_range_erase((PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE), FLASH_SECTOR_SIZE);
+
+// Program buf[] into the first page of this sector
+flash_range_program((PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE), (uint8_t *)buf, FLASH_PAGE_SIZE);
+
+
+
+The Pico SDK provides a convenient macro to ensure functions run from RAM. This macro is typically named __not_in_flash_func(). It’s used when calling the function rather than decorating its declaration:
+#include "pico/bootrom.h"  // Contains the __not_in_flash_func() macro
+
+void my_flash_function(void) {
+    // Code that accesses flash
+    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    flash_range_program(FLASH_TARGET_OFFSET, data, size);
+}
+
+// When calling the function, wrap it with the macro:
+__not_in_flash_func(my_flash_function)();

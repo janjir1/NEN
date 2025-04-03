@@ -38,6 +38,32 @@
 		"raspberry-pi-pico.cmakeAutoConfigure": false,
 		"raspberry-pi-pico.useCmakeTools": true,
 		"raspberry-pi-pico.cmakePath": "${HOME}/.pico-sdk/cmake/v3.31.5/bin/cmake",
-		"raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.12.1/ninja"
+		"raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.12.1/ninja",
+		"files.associations": {
+			"array": "cpp",
+			"span": "cpp",
+			"vector": "cpp",
+			"xstring": "cpp",
+			"xutility": "cpp",
+			"string": "cpp",
+			"string_view": "cpp",
+			"algorithm": "cpp",
+			"functional": "cpp",
+			"optional": "cpp",
+			"system_error": "cpp",
+			"type_traits": "cpp",
+			"xlocmon": "cpp",
+			"xtr1common": "cpp",
+			"charconv": "cpp",
+			"format": "cpp",
+			"tuple": "cpp",
+			"utility": "cpp",
+			"locale": "cpp",
+			"xlocale": "cpp",
+			"xlocmes": "cpp",
+			"xlocnum": "cpp",
+			"xloctime": "cpp",
+			"text_encoding": "cpp"
+		}
 	}
 }
