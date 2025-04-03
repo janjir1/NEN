@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../../../Users/Viktor Cejnek/.pico-sdk/sdk/2.1.1/src/rp2040"
 		}
 	],
 	"settings": {

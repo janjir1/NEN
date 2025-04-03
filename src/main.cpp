@@ -2,6 +2,7 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include "hardware/i2c.h"
+#include "src/registers.hpp"
 #include "mcp2515/mcp2515.h"
 #include "sh1107/sh110x.hpp"
 
@@ -32,6 +33,7 @@ int _RESET_PIN = -1; // set to -1 if not used
 
 
 // =============== Function prototype ================
+void custom_i2c_init(i2c_inst_t* i2c_type, uint16_t CLKspeed, uint8_t  SDApin, uint8_t  SCLKpin);
 bool SetupTest(void);
 void TestLoop(void);
 void EndTest(void);
@@ -64,6 +66,37 @@ int main()
     }
 }
 
+
+void custom_i2c_init(i2c_inst_t* i2c_type, uint16_t CLKspeed, uint8_t  SDApin, uint8_t  SCLKpin)
+{
+	//IO_BANK0_GPIO12_CTRL_FUNCSEL_VALUE_I2C0_SDA
+	volatile uint32_t* gpio_ctrl;
+	gpio_ctrl = reinterpret_cast<uint32_t*>(0x40014000 + (0x64));	//IO_BANK0: 2.19.6.1
+	*gpio_ctrl = (*gpio_ctrl & ~0x1F) | 2;
+	gpio_ctrl = reinterpret_cast<uint32_t*>(0x40014000 + (0x64));
+	*gpio_ctrl = (*gpio_ctrl & ~0x1F) | 2;
+
+	// Enable pull-up
+	volatile uint32_t* pad_ctrl;
+	pad_ctrl = reinterpret_cast<uint32_t*>(0x4001c000 + 13*0x04);	//PADS_BANK0: 2.19.6.3 pg: 302
+	*pad_ctrl = (*pad_ctrl & ~0x18) | (1 << 4);
+	
+}
+
+void custom_set_pin_function(uint8_t pin, pin_func function)
+{
+	volatile uint32_t* gpio_ctrl;
+	gpio_ctrl = reinterpret_cast<uint32_t*>(0x40014000 + (0x64));	//IO_BANK0: 2.19.6.1
+	*gpio_ctrl = (*gpio_ctrl & ~0x1F) | GPIO_FUNC_I2C;
+	
+}
+
+void custom_set_pin_pullup(uint8_t pin)
+{
+	volatile uint32_t* pad_ctrl;
+	pad_ctrl = reinterpret_cast<uint32_t*>(0x4001c000 + (pin + 1)*0x04);	//PADS_BANK0: 2.19.6.3 pg: 302
+	*pad_ctrl = (*pad_ctrl & ~0x18) | (1<<4);
+}
 
 bool SetupTest() 
 {

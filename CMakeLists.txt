@@ -37,6 +37,7 @@ pico_sdk_init()
 
 add_executable(NEN 
     src/main.cpp
+    src/registers.cpp
     
     # Library executables
     # MCP2515
