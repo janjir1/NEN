@@ -1,0 +1,10 @@
+{
+  "commands": [
+    {
+      "text": "$(sync) Reboot",
+      "command": "workbench.action.tasks.runTask",  // VS Code command to run
+      "arguments": ["Reboot Pico"], 
+      "tooltip": "Reboots the pi Pico"
+    }
+  ]
+}
