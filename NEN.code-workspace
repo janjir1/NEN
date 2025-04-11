@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../../../Users/Viktor Cejnek/.pico-sdk/sdk/2.1.1/src/rp2040"
+			"path": "../../../Users/${env:HOME}/.pico-sdk/sdk/2.1.1/src/rp2040"
 		}
 	],
 	"settings": {
@@ -63,7 +63,13 @@
 			"xlocmes": "cpp",
 			"xlocnum": "cpp",
 			"xloctime": "cpp",
-			"text_encoding": "cpp"
+			"text_encoding": "cpp",
+			"deque": "cpp",
+			"initializer_list": "cpp",
+			"list": "cpp",
+			"queue": "cpp",
+			"random": "cpp",
+			"xhash": "cpp"
 		}
 	}
 }
