@@ -113,9 +113,12 @@ rewrites to last sector begining adress, where is overflow begin
 last sector frame: 32 bit beginig, 32 bit overflow begin, 192 bit empty (must write in 1 page chunks), 32 bit end
 
 */
+
+#define MAX_BUFFER_SIZE 10 * FLASH_PAGE_SIZE // max 2.560kB
 extern char __flash_binary_end;
 uint32_t last_sector_begin;
-uint8_t buffer[96];
+//uint8_t buffer[96];
+uint8_t *buffer = NULL;
 uint32_t position = 0;
 uint32_t flash_addr;
 uint32_t flash_overflow_begin;
@@ -152,7 +155,7 @@ bool is_flash_erased(const uint8_t *memory_block, uint32_t size) {
 * If no erased page pair is found, the entire sector is erased and the function
 * returns the beginning offset of the sector.
 */
-uint32_t last_sector_leveling(void){
+uint32_t last_sector_leveling(bool erase_all){
 
     // Loop over the flash pages in the sector.
     // The loop iterates in steps of 2 pages, leaving space for 2 pages at a time.
@@ -171,21 +174,39 @@ uint32_t last_sector_leveling(void){
         }
     }
 
-    // If no erased pages were found in the loop, all pages are considered full. 
-    // Erase the flash sector.  
-    printf("All sectors are full, erasing\n");
-    uint32_t interrupts = save_and_disable_interrupts();
-    __not_in_flash_func(flash_range_erase(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE, FLASH_SECTOR_SIZE));
-    restore_interrupts(interrupts); 
+    //if(erase_all){
+        // If no erased pages were found in the loop, all pages are considered full. 
+        // Erase the flash sector.
+        printf("All sectors are full, erasing\n");
+        uint32_t interrupts = save_and_disable_interrupts();
+        __not_in_flash_func(flash_range_erase(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE, FLASH_SECTOR_SIZE));
+        restore_interrupts(interrupts); 
 
-    // Return the beginning of the flash sector (with XIP_BASE excluded)
-    return (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
+        // Return the beginning of the flash sector (with XIP_BASE excluded)
+        return (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
+        /*
+    }
+    else{
+        // return 0 as there is no more space left to create new header for new file
+        return 0;
+    }
+        */
+
 
 }
 
 uint32_t read_flash(uint32_t position) {
     volatile uint32_t *flash_ptr = (volatile uint32_t *)(position + XIP_BASE);
     return *flash_ptr;
+}
+
+uint32_t greatest_common_divisor(uint32_t a, uint32_t b) {
+    while (b != 0) {
+        uint32_t t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
 }
 
 
@@ -199,13 +220,47 @@ uint32_t read_flash(uint32_t position) {
  *   - Erasing full flash sectors in a specified range.
  *   - Writing control data (flash_addr and flash_overflow_begin) to the
  *     last sector.
+ * Argument
+ * --------------------
+ * input expected frame
  */
-void flash_init(void) {
+uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
+
+    if (count*sizeof(uint32_t) >= FLASH_PAGE_SIZE - (2*sizeof(uint32_t))){
+        printf("This will not work too many parameters\n");
+        return UINT32_MAX;
+    }
+
+    uint8_t total = 0;
+    for (uint8_t i = 0; i < count; ++i) {
+        total += sizes[i];
+    }
+
+    uint32_t buffer_size = FLASH_PAGE_SIZE * (total/(greatest_common_divisor(FLASH_PAGE_SIZE, total)));
+    if (buffer_size > MAX_BUFFER_SIZE){
+        buffer_size = MAX_BUFFER_SIZE;
+    }
+    printf("buffer_size: %d\n", buffer_size);
+
+    
+    buffer = (uint8_t *)malloc(buffer_size);
+    if (buffer == NULL) {
+        printf("Memory allocation failed\n");
+        return UINT32_MAX;
+    }
+        
+
     // Read a flash word from a fixed location (2 pages before the end), important for last sector erasing. If first init then random value should be ok
     flash_addr = read_flash(PICO_FLASH_SIZE_BYTES - 2* FLASH_PAGE_SIZE);
 
     //Get the beginning offset (excluding XIP_BASE) of the last flash sector
-    last_sector_begin = last_sector_leveling();
+    //If there is no more space in header sector and erase all is disabled then will return 0 as there is no free space to write new file
+    last_sector_begin = last_sector_leveling(erase_all);
+    printf("last_sector_begin 0x%x\n", last_sector_begin);
+    if (last_sector_begin == 0){
+        printf("There is no free space\n");
+        return 0;
+    }
     printf("last_sector_begin 0x%x\n", last_sector_begin);
 
     // If the available space calculated does not leave at least 2 pages
@@ -240,42 +295,68 @@ void flash_init(void) {
         flash_addr = flash_overflow_begin;
     }
 
-
+    if (erase_all){
     // Erase full sectors in the region between flash_overflow_begin and the last available sector
-    for (uint32_t pos = flash_overflow_begin; pos < (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE); pos += FLASH_SECTOR_SIZE) {
-    
-        const uint8_t *sector_addr = (const uint8_t *)(pos+XIP_BASE);
-        if (!is_flash_erased(sector_addr, FLASH_SECTOR_SIZE)) {
-            
-            printf("Erasing at adr: 0x%08X\n", pos);
-            uint32_t interrupts = save_and_disable_interrupts();
-            __not_in_flash_func(flash_range_erase(pos, FLASH_SECTOR_SIZE));
-            restore_interrupts(interrupts); 
-
-        }
-        else {
-            //printf("Empty packet at adr: 0x%08X\n", (unsigned int)pos);
-        }
-                   
-    }
+        for (uint32_t pos = flash_overflow_begin; pos < (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE); pos += FLASH_SECTOR_SIZE) {
         
-    printf("Memory erased\n");
+            const uint8_t *sector_addr = (const uint8_t *)(pos+XIP_BASE);
+            if (!is_flash_erased(sector_addr, FLASH_SECTOR_SIZE)) {
+                
+                printf("Erasing at adr: 0x%08X\n", pos);
+                uint32_t interrupts = save_and_disable_interrupts();
+                __not_in_flash_func(flash_range_erase(pos, FLASH_SECTOR_SIZE));
+                restore_interrupts(interrupts); 
+
+            }                   
+        }
+
+        printf("Memory erased\n");
+    }
+
+    
+
+    //Count avalible space
+    uint32_t space_avalible = 0;
+
+    for (uint32_t pos = flash_overflow_begin; pos < (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE); pos += FLASH_SECTOR_SIZE) {
+        
+        const uint8_t *sector_addr = (const uint8_t *)(pos+XIP_BASE);
+        if (is_flash_erased(sector_addr, FLASH_SECTOR_SIZE)) {
+            
+            space_avalible += FLASH_SECTOR_SIZE;
+
+        }                   
+    }
+    
+    printf("There is %d kB of free space\n", space_avalible/1000);
+    
     
     // Write control data to the last sector for tracking purpouse.
     // Fill the buffer with 0xFF (commonly used as the erased state)
-    uint8_t buffer[FLASH_PAGE_SIZE];
-    memset(buffer, 0xFF, sizeof(buffer));
-    memcpy(buffer, &flash_addr, sizeof(flash_addr));
-    memcpy(buffer + sizeof(flash_addr), &flash_overflow_begin, sizeof(flash_overflow_begin));
+    uint8_t init_buffer[FLASH_PAGE_SIZE];
+    memset(init_buffer, 0xFF, sizeof(init_buffer));
+    uint32_t offset = 0;
 
-    printf("Writing to adr: 0x%x\n", last_sector_begin);
+    memcpy(init_buffer + offset, &flash_addr, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    memcpy(init_buffer + offset, &flash_overflow_begin, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    for (uint8_t i = 0; i < count; ++i) {
+        memcpy(init_buffer + offset, &sizes[i], sizeof(uint32_t));
+        offset += sizeof(uint32_t);
+    }
+
+    printf("Writing header to adr: 0x%x\n", last_sector_begin);
 
     uint32_t interrupts = save_and_disable_interrupts();
-    __not_in_flash_func(flash_range_program(last_sector_begin, (uint8_t *)buffer, FLASH_PAGE_SIZE));
+    __not_in_flash_func(flash_range_program(last_sector_begin, (uint8_t *)init_buffer, FLASH_PAGE_SIZE));
     restore_interrupts(interrupts); 
 
     printf("Init finished\n");
 
+    return space_avalible;
 }
 
 /*

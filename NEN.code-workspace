@@ -69,7 +69,9 @@
 			"list": "cpp",
 			"queue": "cpp",
 			"random": "cpp",
-			"xhash": "cpp"
+			"xhash": "cpp",
+			"xtree": "cpp",
+			"cstdint": "cpp"
 		}
 	}
 }
