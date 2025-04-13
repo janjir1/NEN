@@ -124,13 +124,25 @@ uint32_t flash_addr;
 uint32_t flash_overflow_begin;
 
 /*
-* Function: is_flash_erased
-* --------------------------------
-* Purpose: Checks if a given block of flash memory is completely erased.
-* The function iterates through each byte in the provided memory block (of
-* given size) and returns true only if every byte equals 0xFF, which is
-* the typical "erased" state for flash memory.
-*/
+ * Function: is_flash_erased
+ * -------------------------
+ * Purpose:
+ *   Checks if a given block of flash memory is completely erased.
+ *
+ * Description:
+ *   This function iterates through each byte in the provided memory block (of the specified size)
+ *   and verifies whether every byte is in the erased state (0xFF). In flash memory, a byte in the erased
+ *   state typically has all bits set (0xFF). If any byte deviates from 0xFF, the function returns false,
+ *   indicating that part of the flash is programmed. Otherwise, it returns true.
+ *
+ * Arguments:
+ *   memory_block - Pointer to the first byte of the flash memory block to be checked.
+ *   size         - The number of bytes to check within the flash memory block.
+ *
+ * Return Value:
+ *   Returns true if all bytes in the specified memory block are 0xFF (erased state).
+ *   Returns false if any byte is not 0xFF, indicating that the flash block is not fully erased.
+ */
 bool is_flash_erased(const uint8_t *memory_block, uint32_t size) {
 
     for (uint32_t i = 0; i < size; ++i) {
@@ -143,25 +155,31 @@ bool is_flash_erased(const uint8_t *memory_block, uint32_t size) {
 }
 
 /*
-* Function: last_sector_leveling
-* --------------------------------
-* Searches the last flash sector (of size FLASH_SECTOR_SIZE) for the first
-* pair of pages (pages are FLASH_PAGE_SIZE in size; 2 pages are reserved for
-* data) that are erased (i.e. all bytes are 0xFF). This "leveling" approach
-* is intended to decrease wear by spreading writes over multiple pages.
-*
-* If an erased page pair is found, the function returns the absolute beginning
-* offset (excluding XIP_BASE) of the first page where new data can be written.
-* If no erased page pair is found, the entire sector is erased and the function
-* returns the beginning offset of the sector.
-*/
+ * Function: last_sector_leveling
+ * --------------------------------
+ * Purpose:
+ *   Finds the first available pair of erased flash pages in the last sector 
+ *   (sector size = FLASH_SECTOR_SIZE, page size = FLASH_PAGE_SIZE) to reduce wear.
+ *
+ * Behavior:
+ *   - Iterates over pages in pairs; if an erased page is found, returns its flash offset 
+ *     (XIP_BASE excluded).
+ *   - If no erased pages are found and erase_all is true, erases the sector and returns its offset.
+ *   - If erase_all is false, returns 0 to indicate no free space.
+ *
+ * Arguments:
+ *   erase_all - When true, forces an erase of the sector if no free page pair is found.
+ *
+ * Return Value:
+ *   The flash offset (excluding XIP_BASE) where new data can be written, or 0 if no space is available.
+ */
 uint32_t last_sector_leveling(bool erase_all){
 
     // Loop over the flash pages in the sector.
     // The loop iterates in steps of 2 pages, leaving space for 2 pages at a time.
     for (uint8_t i = 0; i <= FLASH_SECTOR_SIZE/FLASH_PAGE_SIZE-2; i+=2) {
 
-        printf("leveling_i: %d\n", i);
+        //printf("leveling_i: %d\n", i);
 
         const uint8_t *addr = (const uint8_t *)(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE + XIP_BASE + (i * FLASH_PAGE_SIZE));
 
@@ -174,7 +192,7 @@ uint32_t last_sector_leveling(bool erase_all){
         }
     }
 
-    //if(erase_all){
+    if(erase_all){
         // If no erased pages were found in the loop, all pages are considered full. 
         // Erase the flash sector.
         printf("All sectors are full, erasing\n");
@@ -184,22 +202,43 @@ uint32_t last_sector_leveling(bool erase_all){
 
         // Return the beginning of the flash sector (with XIP_BASE excluded)
         return (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
-        /*
+
     }
     else{
         // return 0 as there is no more space left to create new header for new file
         return 0;
     }
-        */
-
 
 }
 
+/*
+ * Function: read_flash
+ * --------------------
+ * Reads a 32-bit word from flash memory at the specified offset.
+ *
+ * Arguments:
+ *   position - Flash memory offset (excluding XIP_BASE).
+ *
+ * Returns:
+ *   32-bit value read from flash.
+ */
 uint32_t read_flash(uint32_t position) {
     volatile uint32_t *flash_ptr = (volatile uint32_t *)(position + XIP_BASE);
     return *flash_ptr;
 }
 
+/*
+ * Function: greatest_common_divisor
+ * ---------------------------------
+ * Computes the greatest common divisor (GCD) of two non-negative integers
+ * using the Euclidean algorithm.
+ *
+ * Arguments:
+ *   a, b - Non-negative integers.
+ *
+ * Returns:
+ *   The greatest common divisor of a and b.
+ */
 uint32_t greatest_common_divisor(uint32_t a, uint32_t b) {
     while (b != 0) {
         uint32_t t = b;
@@ -213,16 +252,34 @@ uint32_t greatest_common_divisor(uint32_t a, uint32_t b) {
 /*
  * Function: flash_init
  * --------------------
- * Initializes flash storage by:
- *   - Reading a flash value from a fixed location.
- *   - Determining the next available write address using a leveling
- *     strategy that reduces wear by alternating between page pairs.
- *   - Erasing full flash sectors in a specified range.
- *   - Writing control data (flash_addr and flash_overflow_begin) to the
- *     last sector.
- * Argument
- * --------------------
- * input expected frame
+ * Initializes flash storage by performing the following steps:
+ *   1. Reads a flash word from a fixed location (2 pages before the end) to acquire control data,
+ *      which is used for flash management.
+ *   2. Sums the sizes specified in the input array and computes a buffer size (in multiples of FLASH_PAGE_SIZE)
+ *      that is perfectly divisible by the total of these sizes. The computed buffer size is capped by MAX_BUFFER_SIZE.
+ *   3. Allocates a buffer of the computed size dynamically.
+ *   4. Determines the next available write address using a wear-leveling strategy which alternates between page pairs.
+ *      If there is no free space, the function returns 0.
+ *   5. Computes flash overflow begin address based on the firmware's end and reserves extra space.
+ *   6. Adjusts the flash write address (flash_addr) to ensure data is not written into program memory or outside
+ *      the available flash region.
+ *   7. If the 'erase_all' flag is true, erases full flash sectors between flash_overflow_begin and the last available sector.
+ *   8. Counts the amount of free (erased) flash space in the designated region and prints it.
+ *   9. Constructs a header in an init_buffer that contains:
+ *         - The current flash write address (flash_addr)
+ *         - The flash overflow begin address (flash_overflow_begin)
+ *         - The list of sizes provided in the input array
+ *      This header is then written into the last flash sector.
+ *
+ * Arguments:
+ *   sizes:    An array of uint32_t values representing expected frame sizes (or parameters) that will be incorporated
+ *             into the flash header.
+ *   count:    The number of elements in the 'sizes' array.
+ *   erase_all:Boolean flag indicating whether all sectors in the designated range should be erased.
+ *
+ * Return value:
+ *   Returns the total amount of free flash space available (in bytes) if successful.
+ *   In case of an error (such as memory allocation failure or excessive parameters), returns UINT32_MAX or 0 as appropriate.
  */
 uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
 
@@ -256,7 +313,6 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
     //Get the beginning offset (excluding XIP_BASE) of the last flash sector
     //If there is no more space in header sector and erase all is disabled then will return 0 as there is no free space to write new file
     last_sector_begin = last_sector_leveling(erase_all);
-    printf("last_sector_begin 0x%x\n", last_sector_begin);
     if (last_sector_begin == 0){
         printf("There is no free space\n");
         return 0;
