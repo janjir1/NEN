@@ -36,7 +36,8 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(NEN 
-    NEN.cpp
+    src/main.cpp
+    src/registers.cpp
     
     # Library executables
     # MCP2515
@@ -66,6 +67,7 @@ target_include_directories(NEN PRIVATE
 
 # Add MCP2515 Lib
 target_include_directories(NEN PUBLIC include/)
+target_include_directories(NEN PUBLIC src/)
 
 # Add any user requested libraries
 target_link_libraries(NEN 
