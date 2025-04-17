@@ -82,7 +82,7 @@ class SH110X : public displaylib_graphics  {
 	
 	// flags for debugging & status
 	bool _bIsConnected = false; /**< is device connected/correct flag */
-	bool _bSerialDebugFlag = false; /**< for serial debug I2C errors to console flag */
+	bool _bSerialDebugFlag = true; /**< for serial debug I2C errors to console flag */
 
 	uint8_t _OLED_WIDTH=128;      /**< Width of OLED Screen in pixels */
 	uint8_t _OLED_HEIGHT=64;    /**< Height of OLED Screen in pixels */
