@@ -18,6 +18,17 @@
 #define custom_SIO_GPIO_OUT_SET_OFFSET 0x014
 #define custom_SIO_GPIO_OUT_CLR_OFFSET 0x018
 
+#define custom_RESETS_BASE 0x4000c000
+#define custom_RESETS_RESET_OFFSET 0x000
+#define custom_RESETS_RESET_WDSEL 0x4
+#define custom_RESETS_RESET_DONE 0x8
+
+// Register address offsets for atomic RMW aliases
+#define custom_REG_ALIAS_RW_BITS  (_u(0x0) << _u(12))
+#define custom_REG_ALIAS_XOR_BITS (_u(0x1) << _u(12))
+#define custom_REG_ALIAS_SET_BITS (_u(0x2) << _u(12))
+#define custom_REG_ALIAS_CLR_BITS (_u(0x3) << _u(12))
+
 enum pin_func_t 
 {
     JTAG,
@@ -33,6 +44,35 @@ enum pin_func_t
     NONE = 0x1f
 };
 
+// enum reset_block_t
+// {
+//     ADC,
+//     BUSCTRL,
+//     DMA,
+//     I2C0,
+//     I2C1,
+//     IO_BANK0,
+//     IO_QSPI,
+//     JTAG,
+//     PADS_BANK0,
+//     PADS_QSPI,
+//     PIO0,
+//     PIO1,
+//     PLL_SYS,
+//     PLL_USB,
+//     PWM,
+//     RTC,
+//     SPI0,
+//     SPI1,
+//     SYSCFG,
+//     SYSINFO,
+//     TBMAN,
+//     TIMER,
+//     UART0,
+//     UART1,
+//     USBCTRL
+// };
+
 enum pin_dir_t
 {
     PIN_OUT = 1u, ///< set GPIO to output
@@ -44,6 +84,8 @@ void custom_set_pin_function(uint8_t pin, pin_func_t function);
 void custom_set_pin_pullup(uint8_t pin);
 void custom_set_pin_dir(uint8_t pin, pin_dir_t dir);
 void custom_set_pin_output(uint8_t pin, bool value);
+// void custom_reset_hw_block(reset_block_t block);
+// void custom_unreset_hw_block(reset_block_t block)
 
 /*
 #define IO_BANK0_GPIO1_CTRL_FUNCSEL_RESET  _u(0x1f)

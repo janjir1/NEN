@@ -6,10 +6,24 @@
 #include "mcp2515/mcp2515.h"
 #include "sh1107/sh110x.hpp"
 
+
+///////////////////////////////////////////////
+/*
+OBHAJOBA 6.5.
+
+1-2 strany technicka dokumentace pro Levka
+vyvojovy diagram, tabulka atd
+1 strana EMC
+Pak Novotny 
+*/
+///////////////////////////////////////////////
+
+// =============== Defines =========================
+
+// GPIO Defines
 #define LED_pin 25
 #define BTN_pin 24
 #define NEOPIXEL_pin 23
-
 
 // SPI Defines
 #define SPI_PORT spi0
@@ -19,7 +33,7 @@
 #define PIN_SCK  18
 #define PIN_MOSI 19
 
-// Screen Size 
+// SH1107 Defines
 #define myOLEDwidth  128
 #define myOLEDheight 128
 #define FULLSCREEN (myOLEDwidth * (myOLEDheight/8))
@@ -36,6 +50,11 @@ const uint8_t DATA_PIN = 12;
 // Reset only needed if Hardware reset pin is present on device and used
 int _RESET_PIN = -1; // set to -1 if not used
 
+// MCP2515 CAN defines
+#define PID_COOLANT_TEMP 0x05 // PID for coolant temperature
+#define PID_VAG 0x7E0 // PID for coolant temperature 2
+
+
 
 // =============== Function prototype ================
 bool SetupTest(void);
@@ -45,40 +64,15 @@ void EndTest(void);
 // MCP2515 defines
 MCP2515 can0(spi0, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUD); 
 struct can_frame rx;
+struct can_frame tx; // CAN frame structure for sending messages
 
-/*
-OBHAJOBA 6.5.
 
-1-2 strany technicka dokumentace pro Levka
-vyvojovy diagram, tabulka atd
-1 strana EMC
-Pak Novotny 
-*/
 
 
 
 int main()
 {
     stdio_init_all();
-
-	custom_set_pin_function(25, SIO); // Set GPIO 25 to SIO function
-	//custom_set_pin_pullup(25); // Enable pull-up on GPIO 25
-	//gpio_init(26); // Initialize GPIO 26
-	//gpio_set_dir(25, GPIO_OUT); // Set GPIO 26 as output
-	//gpio_put(25, 1); // Set GPIO 26 high
-
-	custom_set_pin_dir(LED_pin, PIN_OUT); // Set GPIO 25 as output
-	while (1)
-	{
-		custom_set_pin_output(LED_pin, true); // Set GPIO 25 high
-		printf("LED ON\n");
-		sleep_ms(1000); // Wait for 1 second
-		custom_set_pin_output(LED_pin, false); // Set GPIO 25 low
-		printf("LED OFF\n");
-		sleep_ms(1000); // Wait for 1 second
-	}
-	
-
 
     //Initialize CAN0
     can0.reset();
@@ -89,11 +83,28 @@ int main()
     if(SetupTest()) TestLoop();
 	//EndTest();
     
-
+	tx.can_id = PID_COOLANT_TEMP; // CAN ID
+	tx.can_dlc = 0; // Data length code
+	can0.sendMessage(&tx); // Send message
+	busy_wait_ms(1);
+	if(can0.readMessage(&rx) == MCP2515::ERROR_OK) {
+		printf("\nNew frame from ID: %10x\n", rx.can_id);
+		printf("DLC: %d\n", rx.can_dlc);
+		for(int i = 0; i < rx.can_dlc; i++) {
+			printf("Data[%d]: %02x\n", i, rx.data[i]);
+		}
+	}
 
     while (true) {
-        printf("Hello, world!\n");
-        sleep_ms(1000);
+        // printf("Hello, world!\n");
+        // sleep_ms(1000);
+		if(can0.readMessage(&rx) == MCP2515::ERROR_OK) {
+            printf("\nNew frame from ID: %10x\n", rx.can_id);
+			printf("DLC: %d\n", rx.can_dlc);
+			for(int i = 0; i < rx.can_dlc; i++) {
+				printf("Data[%d]: %02x\n", i, rx.data[i]);
+			}
+        }
     }
 }
 
@@ -102,7 +113,7 @@ int main()
 
 bool SetupTest() 
 {
-	stdio_init_all(); // Initialize chosen serial port, default 38400 baud
+	//stdio_init_all(); // Initialize chosen serial port, default 38400 baud
 	busy_wait_ms(500);
 	printf("OLED SH1107 :: Start!\r\n");
 	while(myOLED.OLEDbegin(myOLED.SH1107_IC, _RESET_PIN, ADDR, i2c0, 
