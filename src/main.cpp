@@ -6,6 +6,11 @@
 #include "mcp2515/mcp2515.h"
 #include "sh1107/sh110x.hpp"
 
+#define LED_pin 25
+#define BTN_pin 24
+#define NEOPIXEL_pin 23
+
+
 // SPI Defines
 #define SPI_PORT spi0
 #define SPI_BAUD 10000000 // 10MHz
@@ -59,8 +64,20 @@ int main()
 	custom_set_pin_function(25, SIO); // Set GPIO 25 to SIO function
 	//custom_set_pin_pullup(25); // Enable pull-up on GPIO 25
 	//gpio_init(26); // Initialize GPIO 26
-	gpio_set_dir(25, GPIO_OUT); // Set GPIO 26 as output
-	gpio_put(25, 1); // Set GPIO 26 high
+	//gpio_set_dir(25, GPIO_OUT); // Set GPIO 26 as output
+	//gpio_put(25, 1); // Set GPIO 26 high
+
+	custom_set_pin_dir(LED_pin, PIN_OUT); // Set GPIO 25 as output
+	while (1)
+	{
+		custom_set_pin_output(LED_pin, true); // Set GPIO 25 high
+		printf("LED ON\n");
+		sleep_ms(1000); // Wait for 1 second
+		custom_set_pin_output(LED_pin, false); // Set GPIO 25 low
+		printf("LED OFF\n");
+		sleep_ms(1000); // Wait for 1 second
+	}
+	
 
 
     //Initialize CAN0
