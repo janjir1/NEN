@@ -33,7 +33,6 @@ int _RESET_PIN = -1; // set to -1 if not used
 
 
 // =============== Function prototype ================
-void custom_i2c_init(i2c_inst_t* i2c_type, uint16_t CLKspeed, uint8_t  SDApin, uint8_t  SCLKpin);
 bool SetupTest(void);
 void TestLoop(void);
 void EndTest(void);
@@ -42,12 +41,27 @@ void EndTest(void);
 MCP2515 can0(spi0, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUD); 
 struct can_frame rx;
 
+/*
+OBHAJOBA 6.5.
+
+1-2 strany technicka dokumentace pro Levka
+vyvojovy diagram, tabulka atd
+1 strana EMC
+Pak Novotny 
+*/
 
 
 
 int main()
 {
     stdio_init_all();
+
+	custom_set_pin_function(25, SIO); // Set GPIO 25 to SIO function
+	//custom_set_pin_pullup(25); // Enable pull-up on GPIO 25
+	//gpio_init(26); // Initialize GPIO 26
+	gpio_set_dir(25, GPIO_OUT); // Set GPIO 26 as output
+	gpio_put(25, 1); // Set GPIO 26 high
+
 
     //Initialize CAN0
     can0.reset();
@@ -67,36 +81,7 @@ int main()
 }
 
 
-void custom_i2c_init(i2c_inst_t* i2c_type, uint16_t CLKspeed, uint8_t  SDApin, uint8_t  SCLKpin)
-{
-	//IO_BANK0_GPIO12_CTRL_FUNCSEL_VALUE_I2C0_SDA
-	volatile uint32_t* gpio_ctrl;
-	gpio_ctrl = reinterpret_cast<uint32_t*>(0x40014000 + (0x64));	//IO_BANK0: 2.19.6.1
-	*gpio_ctrl = (*gpio_ctrl & ~0x1F) | 2;
-	gpio_ctrl = reinterpret_cast<uint32_t*>(0x40014000 + (0x64));
-	*gpio_ctrl = (*gpio_ctrl & ~0x1F) | 2;
 
-	// Enable pull-up
-	volatile uint32_t* pad_ctrl;
-	pad_ctrl = reinterpret_cast<uint32_t*>(0x4001c000 + 13*0x04);	//PADS_BANK0: 2.19.6.3 pg: 302
-	*pad_ctrl = (*pad_ctrl & ~0x18) | (1 << 4);
-	
-}
-
-void custom_set_pin_function(uint8_t pin, pin_func function)
-{
-	volatile uint32_t* gpio_ctrl;
-	gpio_ctrl = reinterpret_cast<uint32_t*>(0x40014000 + (0x64));	//IO_BANK0: 2.19.6.1
-	*gpio_ctrl = (*gpio_ctrl & ~0x1F) | GPIO_FUNC_I2C;
-	
-}
-
-void custom_set_pin_pullup(uint8_t pin)
-{
-	volatile uint32_t* pad_ctrl;
-	pad_ctrl = reinterpret_cast<uint32_t*>(0x4001c000 + (pin + 1)*0x04);	//PADS_BANK0: 2.19.6.3 pg: 302
-	*pad_ctrl = (*pad_ctrl & ~0x18) | (1<<4);
-}
 
 bool SetupTest() 
 {

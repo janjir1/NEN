@@ -1,9 +1,15 @@
 #pragma once
 
 #include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
 
 
-#define custom_PADS_BANK0_GPIO_OFFSET _u(0x00000004)
+#define custom_IO_BANK0_BASE 0x40014000
+#define custom_IO_BANK0_GPIO_CTRL_OFFSET 0x004
+
+#define custom_PADS_BANK0_BASE 0x4001C000
+#define custom_PADS_BANK0_GPIO_OFFSET 0x04
 #define PUE_val 1<<4
 
 enum pin_func 
@@ -21,7 +27,9 @@ enum pin_func
     NONE = 0x1f
 };
 
-
+void custom_i2c_init(i2c_inst_t* i2c_type, uint16_t CLKspeed, uint8_t  SDApin, uint8_t  SCLKpin);
+void custom_set_pin_function(uint8_t pin, pin_func function);
+void custom_set_pin_pullup(uint8_t pin);
 
 /*
 #define IO_BANK0_GPIO1_CTRL_FUNCSEL_RESET  _u(0x1f)
