@@ -119,6 +119,7 @@ extern char __flash_binary_end;
 uint32_t last_sector_begin;
 //uint8_t buffer[96];
 uint8_t *buffer = NULL;
+uint32_t buffer_size = 0;
 uint32_t position = 0;
 uint32_t flash_addr;
 uint32_t flash_overflow_begin;
@@ -177,7 +178,7 @@ uint32_t last_sector_leveling(bool erase_all){
 
     // Loop over the flash pages in the sector.
     // The loop iterates in steps of 2 pages, leaving space for 2 pages at a time.
-    for (uint8_t i = 0; i <= FLASH_SECTOR_SIZE/FLASH_PAGE_SIZE-2; i+=2) {
+    for (uint8_t i = 0; i <= FLASH_SECTOR_SIZE/FLASH_PAGE_SIZE-1; i+=1) {
 
         //printf("leveling_i: %d\n", i);
 
@@ -293,7 +294,7 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
         total += sizes[i];
     }
 
-    uint32_t buffer_size = FLASH_PAGE_SIZE * (total/(greatest_common_divisor(FLASH_PAGE_SIZE, total)));
+    buffer_size = FLASH_PAGE_SIZE * (total/(greatest_common_divisor(FLASH_PAGE_SIZE, total)));
     if (buffer_size > MAX_BUFFER_SIZE){
         buffer_size = MAX_BUFFER_SIZE;
     }
@@ -308,7 +309,7 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
         
 
     // Read a flash word from a fixed location (2 pages before the end), important for last sector erasing. If first init then random value should be ok
-    flash_addr = read_flash(PICO_FLASH_SIZE_BYTES - 2* FLASH_PAGE_SIZE);
+    flash_addr = read_flash(PICO_FLASH_SIZE_BYTES - FLASH_PAGE_SIZE);
 
     //Get the beginning offset (excluding XIP_BASE) of the last flash sector
     //If there is no more space in header sector and erase all is disabled then will return 0 as there is no free space to write new file
@@ -323,8 +324,8 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
     // before the sector's beginning relative to the whole flash size,
     // then re-read flash_addr from a lower position.
 
-    if (!((last_sector_begin - 2* FLASH_PAGE_SIZE)<(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE))){
-        flash_addr = read_flash(last_sector_begin - 2* FLASH_PAGE_SIZE);
+    if (!((last_sector_begin - FLASH_PAGE_SIZE)<(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE))){
+        flash_addr = read_flash(last_sector_begin - FLASH_PAGE_SIZE);
     }
 
     printf("Flash begin: 0x%08X\n", flash_addr);
@@ -425,40 +426,42 @@ can be forced to write not fullz complete buffer to flash
 */
 
 
+// how to use flash_write(&value16, sizeof(value16), false);
 
-void flash_write(uint32_t id, uint8_t data[8], bool write_all) {
+void flash_write(const void* data, uint8_t data_size, bool write_all) {
+
+    if (position + data_size >= buffer_size){
+        for(uint8_t i = 0; i<buffer_size; i+= FLASH_PAGE_SIZE){
+
+            if (flash_addr + FLASH_PAGE_SIZE >= PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE){
+                flash_addr = flash_overflow_begin;
+
+            const uint8_t* data_ptr = &buffer[i];
+            printf("Writing to adr: 0x%08X\n", (unsigned int)flash_addr);
+            //__not_in_flash_func(flash_writer_process(flash_addr, &data_ptr));
+            __not_in_flash_func(flash_range_program(flash_addr, data_ptr, FLASH_PAGE_SIZE));
+
+            // check for memory overflow
+
+            flash_addr += FLASH_PAGE_SIZE;
+
+        }
 
     // Copy values into the buffer
-    memcpy(buffer + position, &id, sizeof(id));
-    position += sizeof(id);
-    memcpy(buffer + position, data, 8);
-    position += 8;
+    memcpy(buffer + position, data, data_size);
+    position += data_size;
 
-    // Force folowing condition to be true, rest of array should be 0
+    // Force folowing condition to be true, rest of array should be 1
     if (write_all == true){
-        memset(buffer + position, 0, sizeof(buffer) - position);
+        memset(buffer + position, 1, sizeof(buffer) - position);
         position = sizeof(buffer);
     }
 
     // Write buffer to flash
-    if (position == sizeof(buffer)){
-        // needs to be done 3 times
-        for(uint8_t i = 0; i<3; i++){
-            const uint8_t* data_ptr = &buffer[i * 32];
-            printf("Writing to adr: 0x%08X\n", (unsigned int)flash_addr);
-            //__not_in_flash_func(flash_writer_process(flash_addr, &data_ptr));
-
-            // check for memory overflow
-            if (flash_addr + 0x100 >= PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE){
-                flash_addr = flash_overflow_begin;
-            }
-            else {
-                flash_addr += 0x100;
-            }
-        }
+    
 
         //Clear buffer
-        memset(buffer, 0, sizeof(buffer));
+        memset(buffer, 1, sizeof(buffer));
         position = 0;
     }
     
