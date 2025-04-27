@@ -187,3 +187,26 @@ void TestLoop()
 	myOLED.OLEDupdate();
 	busy_wait_ms(5000);
 }
+
+// wait for button press and run flash initi
+
+	gpio_init(BUTTON_PIN);
+    gpio_set_dir(BUTTON_PIN, GPIO_IN);
+    gpio_pull_up(BUTTON_PIN);
+
+    // Print message to the serial console.
+    printf("Waiting for the button press...\n");
+
+    // Wait in a loop until the button is pressed.
+    // Since the pull-up is enabled, the button pin reads high when idle and low when pressed.
+    while (gpio_get(BUTTON_PIN)) {
+		printf("Waiting\n");
+        sleep_ms(1000); // delay to avoid busy looping
+    }
+
+	printf("Button pressed\n");
+
+	uint32_t sizes[] = {sizeof(uint32_t), sizeof(uint16_t), sizeof(uint32_t)};
+	uint8_t count = sizeof(sizes) / sizeof(sizes[0]);
+
+	uint32_t avalible = flash_init(sizes, count, false);
