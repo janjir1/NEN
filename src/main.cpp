@@ -28,92 +28,37 @@ int main() {
     
 	sleep_ms(10000);
 
-	mcp_2515_init(CAN_500KBPS, MCP_8MHZ, SPI_PORT, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUDRATE);
+	bool post_pass = mcp_2515_init(CAN_500KBPS, MCP_8MHZ, SPI_PORT, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUDRATE);
+
+	if (!post_pass){
+		while(true){
+			printf("POST FAIL");
+			sleep_ms(10000);
+		}
+	}
+
+	printf("POST PASS");
+	Result res;
 
 	while(true){
-		/*
-		MCP2515::ERROR result = can0.readMessage(&rxMsg);
-        
-        if(result == MCP2515::ERROR_OK) {
-            // Print message metadata
-            printf("\nCAN ID: 0x%08X", rxMsg.can_id);
-            printf(" DLC: %d", rxMsg.can_dlc);
-            
-            // Detect frame type
-            if(rxMsg.can_id & CAN_RTR_FLAG) {
-                printf(" [RTR Frame]");
-            } else if(rxMsg.can_id & CAN_EFF_FLAG) {
-                printf(" [Extended Frame]");
-            } else {
-                printf(" [Standard Frame]");
-            }
-            
-            // Print data payload
-            printf("\nData: ");
-            for(int i = 0; i < rxMsg.can_dlc; i++) {
-                printf("%02X ", rxMsg.data[i]);
-            }
-            printf("\n");
-
-        } else if(result != MCP2515::ERROR_NOMSG) {
-            //printf("Error reading message: %d\n", result);
-        }
-        
-        sleep_ms(10); // Prevent tight loop
-		*/
 		
-		/*	-------------------minimal example -------------------------------------- requires normal
-			if(can0.readMessage(&rx) == MCP2515::ERROR_OK) {
-				printf("New frame from ID: %10x\n", rxMsg.can_id);
-			}
-		*/	
-			// -------------------ask rpm -------------------------------------- requires normal
-			/*
-			struct can_frame txMsg;
-			txMsg.can_id = 0x7DF;  // OBD-II broadcast request ID
-			txMsg.can_dlc = 8;      // Always 8 bytes for OBD-II requests
-			
-			// OBD-II RPM request (PID 0x0C) 
-			txMsg.data[0] = 0x02;   // Number of additional bytes
-			txMsg.data[1] = 0x01;   // Mode 01 (Current data)
-			txMsg.data[2] = 0x0C;   // PID 0x0C (Engine RPM)
-			txMsg.data[3] = 0x55;   // Padding
-			txMsg.data[4] = 0x55;   // Padding
-			txMsg.data[5] = 0x55;   // Padding
-			txMsg.data[6] = 0x55;   // Padding
-			txMsg.data[7] = 0x55;   // Padding
+		if (get_decoded_data(PID_ENGINE_RPM, &res)) {
+			printf("%s: %u %s\n",
+				res.name, res.value, res.unit);
+		}
+		sleep_ms(100);
 
-			err = can0.sendMessage(&txMsg);
-			if (err != MCP2515::ERROR_OK) {
-				printf("Error sending message: %d\n", err);
-				return false;
-			}
+		if (get_decoded_data(PID_COOLANT_TEMPERATURE, &res)) {
+			printf("%s: %u %s\n",
+				res.name, res.value, res.unit);
+		}
+		sleep_ms(100);
+
+		if (get_decoded_data(PID_THROTTLE_POSITION, &res)) {
+			printf("%s: %u %s\n",
+				res.name, res.value, res.unit);
+		}
+		sleep_ms(100);
 			
-			// Wait for the message to be received
-			struct can_frame rxMsg;
-			uint32_t startTime = to_ms_since_boot(get_absolute_time());
-			bool received = false;
-			
-			// Try to receive for up to 1 second
-			while (to_ms_since_boot(get_absolute_time()) - startTime < 1000) {
-				err = can0.readMessage(&rxMsg);
-				if (err == MCP2515::ERROR_OK) {
-					printf("Frame recived\nCAN ID: 0x%08X\n", rxMsg.can_id);
-					received = true;
-					if(rxMsg.can_id == 0x7E8 && rxMsg.data[2] == 0x0C) {
-						uint16_t rpm = (rxMsg.data[3] << 8 | rxMsg.data[4]) / 4;
-						printf("Engine RPM: %d\n", rpm);
-					}
-					break;
-				}
-				sleep_ms(10); // Small delay to prevent tight loop
-			}
-			
-			if (!received) {
-				printf("No message received in loopback mode\n");
-				return false;
-			}
-			*/	
-				
 	}
 }
