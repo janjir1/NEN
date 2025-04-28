@@ -1,151 +1,264 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
-#include "hardware/i2c.h"
-#include "src/registers.hpp"
-#include "mcp2515/mcp2515.h"
-#include "sh1107/sh110x.hpp"
+#include "mcp2515/mcp2515.h"  // Requires MCP2515 CAN controller library
 
-
-///////////////////////////////////////////////
-/*
-OBHAJOBA 6.5.
-
-1-2 strany technicka dokumentace pro Levka
-vyvojovy diagram, tabulka atd
-1 strana EMC
-Pak Novotny 
-*/
-///////////////////////////////////////////////
-
-// =============== Defines =========================
-
-// GPIO Defines
-#define LED_pin 25
-#define BTN_pin 24
-#define NEOPIXEL_pin 23
-
-// SPI Defines
 #define SPI_PORT spi0
-#define SPI_BAUD 10000000 // 10MHz
-#define PIN_MISO 16
-#define PIN_CS   17
-#define PIN_SCK  18
-#define PIN_MOSI 19
+#define SPI_BAUDRATE 10000000  // 10 MHz recommended for MCP2515
 
-// SH1107 Defines
-#define myOLEDwidth  128
-#define myOLEDheight 128
-#define FULLSCREEN (myOLEDwidth * (myOLEDheight/8))
-uint8_t  screenBuffer[FULLSCREEN];
+MCP2515::ERROR err;
 
-SH110X myOLED(myOLEDwidth ,myOLEDheight) ; // instantiate a OLED object
+// GPIO Definitions
+#define PIN_MISO  0
+#define PIN_CS    1
+#define PIN_SCK   2
+#define PIN_MOSI  3
 
-// I2C settings
-const uint8_t ADDR = 0x3C; // I2C address
-const uint16_t SPEED = 400; // I2C clock speed in kilo hertz
-const uint8_t CLK_PIN = 13;
-const uint8_t DATA_PIN = 12;
+struct can_frame txMsg;
+struct can_frame rxMsg;
 
-// Reset only needed if Hardware reset pin is present on device and used
-int _RESET_PIN = -1; // set to -1 if not used
+//MCP2515 can0;  // CAN controller instance/
+MCP2515 can0(spi0, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUDRATE); 
 
-// MCP2515 CAN defines
-#define PID_COOLANT_TEMP 0x05 // PID for coolant temperature
-#define PID_VAG 0x7E0 // PID for coolant temperature 2
+uint8_t read_canstat() {
+    uint8_t rx_data[3] = {0};  // Receive buffer
+    uint8_t tx_buf[] = {0x03, 0x0E, 0x00}; // READ cmd + reg address + dummy byte
 
-
-
-// =============== Function prototype ================
-bool SetupTest(void);
-void TestLoop(void);
-void EndTest(void);
-
-// MCP2515 defines
-MCP2515 can0(spi0, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUD); 
-struct can_frame rx;
-struct can_frame tx; // CAN frame structure for sending messages
-
-
-
-
-
-int main()
-{
-    stdio_init_all();
-
-    //Initialize CAN0
-    can0.reset();
-    can0.setBitrate(CAN_1000KBPS, MCP_8MHZ);
-    can0.setListenOnlyMode();
-
+    gpio_put(PIN_CS, 0);
+    spi_write_read_blocking(SPI_PORT, tx_buf, rx_data, sizeof(tx_buf));
+    gpio_put(PIN_CS, 1);
     
-    if(SetupTest()) TestLoop();
-	//EndTest();
-    
-	tx.can_id = PID_COOLANT_TEMP; // CAN ID
-	tx.can_dlc = 0; // Data length code
-	can0.sendMessage(&tx); // Send message
-	busy_wait_ms(1);
-	if(can0.readMessage(&rx) == MCP2515::ERROR_OK) {
-		printf("\nNew frame from ID: %10x\n", rx.can_id);
-		printf("DLC: %d\n", rx.can_dlc);
-		for(int i = 0; i < rx.can_dlc; i++) {
-			printf("Data[%d]: %02x\n", i, rx.data[i]);
-		}
+    return rx_data[2]; // Received data is in third byte
+}
+
+void spi_init_device() {
+    // Initialize SPI at 10 MHz
+    spi_init(SPI_PORT, SPI_BAUDRATE);
+    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
+    // Configure GPIOs
+    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+}
+
+// add some return if failed
+void mcp_2515_init(CAN_SPEED speed, CAN_CLOCK clock){
+
+	spi_init_device();
+
+	err = can0.reset();
+	if(err != MCP2515::ERROR_OK) {
+		printf("Reset error: %d\n", err);
 	}
+	
+	// Set config mode
+	err = can0.setConfigMode();
+	if(err != MCP2515::ERROR_OK) {
+		printf("Config mode error: %d\n", err);
+	}
+	
+	// Verify CANSTAT (bit 7-5 = 100 for config mode)
+	uint8_t canstat = can0.readRegister(MCP2515::MCP_CANSTAT);
+	if((canstat & 0xE0) != 0x80) {
+		printf("Not in config mode! CANSTAT=0x%02X\n", canstat);
+	}
+	
+	// Set bitrate (critical for internal timing)
+	err = can0.setBitrate(speed, clock);
+	if(err != MCP2515::ERROR_OK) {
+		printf("Bitrate error: %d\n", err);
+	}
+}
 
-    while (true) {
-        // printf("Hello, world!\n");
-        // sleep_ms(1000);
-		if(can0.readMessage(&rx) == MCP2515::ERROR_OK) {
-            printf("\nNew frame from ID: %10x\n", rx.can_id);
-			printf("DLC: %d\n", rx.can_dlc);
-			for(int i = 0; i < rx.can_dlc; i++) {
-				printf("Data[%d]: %02x\n", i, rx.data[i]);
-			}
+bool test_mcp2515_loopback(MCP2515 &can) {
+    printf("Starting MCP2515 loopback test...\n");
+    
+    // Reset the MCP2515
+    can.reset();
+    sleep_ms(100); // Allow time for reset to complete
+    
+    mcp_2515_init(CAN_125KBPS, MCP_8MHZ);
+    
+    err = can.setLoopbackMode();
+    if (err != MCP2515::ERROR_OK) {
+        printf("Error setting loopback mode: %d\n", err);
+        return false;
+    }
+    
+    // Create a test message
+    struct can_frame txMsg;
+    txMsg.can_id = 0x123;  // Test ID
+    txMsg.can_dlc = 8;     // 8 bytes of data
+    
+    // Fill with test pattern
+    for (int i = 0; i < 8; i++) {
+        txMsg.data[i] = 0x10 + i;  // 0x10, 0x11, 0x12, etc.
+    }
+    
+    // Send the message
+    printf("Sending test message with ID: 0x%03X\n", txMsg.can_id);
+    err = can.sendMessage(&txMsg);
+    if (err != MCP2515::ERROR_OK) {
+        printf("Error sending message: %d\n", err);
+        return false;
+    }
+    
+    // Wait for the message to be received
+    struct can_frame rxMsg;
+    uint32_t startTime = to_ms_since_boot(get_absolute_time());
+    bool received = false;
+    
+    // Try to receive for up to 1 second
+    while (to_ms_since_boot(get_absolute_time()) - startTime < 1000) {
+        err = can.readMessage(&rxMsg);
+        if (err == MCP2515::ERROR_OK) {
+            received = true;
+            break;
+        }
+        sleep_ms(10); // Small delay to prevent tight loop
+    }
+    
+    if (!received) {
+        printf("No message received in loopback mode\n");
+        return false;
+    }
+    
+    // Verify the received message matches the sent message
+    printf("Message received with ID: 0x%03X\n", rxMsg.can_id);
+    
+    bool match = true;
+    if (rxMsg.can_id != txMsg.can_id) {
+        printf("Error: Received ID 0x%03X does not match sent ID 0x%03X\n", 
+               rxMsg.can_id, txMsg.can_id);
+        match = false;
+    }
+    
+    if (rxMsg.can_dlc != txMsg.can_dlc) {
+        printf("Error: Received DLC %d does not match sent DLC %d\n", 
+               rxMsg.can_dlc, txMsg.can_dlc);
+        match = false;
+    }
+    
+    printf("Data received: ");
+    for (int i = 0; i < rxMsg.can_dlc; i++) {
+        printf("0x%02X ", rxMsg.data[i]);
+        if (rxMsg.data[i] != txMsg.data[i]) {
+            match = false;
         }
     }
+    printf("\n");
+    
+    if (!match) {
+        printf("Data mismatch between sent and received messages\n");
+        return false;
+    }
+    
+    printf("Loopback test passed: sent and received messages match\n");
+    return true;
 }
 
+int main() {
+    stdio_init_all();
+    
+	sleep_ms(10000);
 
+	if (test_mcp2515_loopback(can0)) {
+        printf("Test_pass\n");
+    } else {
+        printf("Test_fail\n");
+    }
 
+	mcp_2515_init(CAN_500KBPS, MCP_8MHZ);
 
-bool SetupTest() 
-{
-	//stdio_init_all(); // Initialize chosen serial port, default 38400 baud
-	busy_wait_ms(500);
-	printf("OLED SH1107 :: Start!\r\n");
-	while(myOLED.OLEDbegin(myOLED.SH1107_IC, _RESET_PIN, ADDR, i2c0, 
-					SPEED, DATA_PIN, CLK_PIN) != DisplayRet::Success)
-	{
-		printf("SetupTest ERROR : Failed to initialize OLED!\r\n");
-		busy_wait_ms(1500);
-	} // initialize the OLED
-	if (myOLED.OLEDSetBufferPtr(myOLEDwidth, myOLEDheight, screenBuffer) != DisplayRet::Success)
-	{
-		printf("SetupTest : ERROR : OLEDSetBufferPtr Failed!\r\n");
-		return false;
-	} // Initialize the buffer
-	myOLED.OLEDFillScreen(0xF0, 0); // splash screen bars
-	busy_wait_ms(1000);
-	return true;
-}
+	//err = can0.setNormalMode();
+	err = can0.setListenOnlyMode();
+    if (err != MCP2515::ERROR_OK) {
+        printf("Error setting listening mode: %d\n", err);
+        return false;
+    }
 
-void EndTest()
-{
-	myOLED.OLEDPowerDown();
-	myOLED.OLED_I2C_OFF();
-	printf("OLED Test End\r\n");
-}
+	while(true){
+		
+		MCP2515::ERROR result = can0.readMessage(&rxMsg);
+        
+        if(result == MCP2515::ERROR_OK) {
+            // Print message metadata
+            printf("\nCAN ID: 0x%08X", rxMsg.can_id);
+            printf(" DLC: %d", rxMsg.can_dlc);
+            
+            // Detect frame type
+            if(rxMsg.can_id & CAN_RTR_FLAG) {
+                printf(" [RTR Frame]");
+            } else if(rxMsg.can_id & CAN_EFF_FLAG) {
+                printf(" [Extended Frame]");
+            } else {
+                printf(" [Standard Frame]");
+            }
+            
+            // Print data payload
+            printf("\nData: ");
+            for(int i = 0; i < rxMsg.can_dlc; i++) {
+                printf("%02X ", rxMsg.data[i]);
+            }
+            printf("\n");
 
-void TestLoop()
-{	
-	if (myOLED.OLEDSetBufferPtr(myOLEDwidth, myOLEDheight, screenBuffer) != DisplayRet::Success) return;
-	myOLED.OLEDclearBuffer();
-	myOLED.setFont(pFontDefault);
-	myOLED.setCursor(10, 10);
-	myOLED.print("Hello World.");
-	myOLED.OLEDupdate();
-	busy_wait_ms(5000);
+        } else if(result != MCP2515::ERROR_NOMSG) {
+            //printf("Error reading message: %d\n", result);
+        }
+        
+        sleep_ms(10); // Prevent tight loop
+		
+		/*	-------------------minimal example -------------------------------------- requires normal
+			if(can0.readMessage(&rx) == MCP2515::ERROR_OK) {
+				printf("New frame from ID: %10x\n", rxMsg.can_id);
+			}
+		*/	
+			/* -------------------ask rpm -------------------------------------- requires normal
+			struct can_frame txMsg;
+			txMsg.can_id = 0x7DF;  // OBD-II broadcast request ID
+			txMsg.can_dlc = 8;      // Always 8 bytes for OBD-II requests
+			
+			// OBD-II RPM request (PID 0x0C) 
+			txMsg.data[0] = 0x02;   // Number of additional bytes
+			txMsg.data[1] = 0x01;   // Mode 01 (Current data)
+			txMsg.data[2] = 0x0C;   // PID 0x0C (Engine RPM)
+			txMsg.data[3] = 0x55;   // Padding
+			txMsg.data[4] = 0x55;   // Padding
+			txMsg.data[5] = 0x55;   // Padding
+			txMsg.data[6] = 0x55;   // Padding
+			txMsg.data[7] = 0x55;   // Padding
+
+			err = can0.sendMessage(&txMsg);
+			if (err != MCP2515::ERROR_OK) {
+				printf("Error sending message: %d\n", err);
+				return false;
+			}
+			
+			// Wait for the message to be received
+			struct can_frame rxMsg;
+			uint32_t startTime = to_ms_since_boot(get_absolute_time());
+			bool received = false;
+			
+			// Try to receive for up to 1 second
+			while (to_ms_since_boot(get_absolute_time()) - startTime < 1000) {
+				err = can0.readMessage(&rxMsg);
+				if (err == MCP2515::ERROR_OK) {
+					printf("Frame recived\nCAN ID: 0x%08X\n", rxMsg.can_id);
+					received = true;
+					if(rxMsg.can_id == 0x7E8 && rxMsg.data[2] == 0x0C) {
+						uint16_t rpm = (rxMsg.data[3] << 8 | rxMsg.data[4]) / 4;
+						printf("Engine RPM: %d\n", rpm);
+					}
+					break;
+				}
+				sleep_ms(10); // Small delay to prevent tight loop
+			}
+			
+			if (!received) {
+				printf("No message received in loopback mode\n");
+				return false;
+			}
+				*/
+	}
 }
