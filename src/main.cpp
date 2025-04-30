@@ -2,18 +2,14 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include "mcp2515/mcp2515.h"  
-#include "src/CAN_module.cpp"// Requires MCP2515 CAN controller library
+#include "CAN_module.hpp"// Requires MCP2515 CAN controller library
+#include "sh1107/sh110x.hpp"
+#include "OLED_module.hpp" // Requires SH1107 OLED library
+#include "defines.hpp" // Defines for GPIO, SPI, I2C, etc.
 
-#define SPI_PORT spi0
-#define SPI_BAUDRATE 10000000  // 10 MHz recommended for MCP2515
 
+// Definitions
 MCP2515::ERROR err;
-
-// GPIO Definitions
-#define PIN_MISO  0
-#define PIN_CS    1
-#define PIN_SCK   2
-#define PIN_MOSI  3
 
 struct can_frame txMsg;
 struct can_frame rxMsg;
@@ -23,9 +19,16 @@ struct can_frame rxMsg;
 
 
 
+
+
 int main() {
     stdio_init_all();
     
+	//myOLED_init(I2C_ADDR, I2C_SPEED, I2C_CLK_PIN, I2C_DATA_PIN, I2C_RESET_PIN);
+
+	myOLED_init(); // Initialize the OLED display
+	
+
 	sleep_ms(10000);
 
 	bool post_pass = mcp_2515_init(CAN_500KBPS, MCP_8MHZ, SPI_PORT, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUDRATE);
@@ -62,3 +65,4 @@ int main() {
 			
 	}
 }
+

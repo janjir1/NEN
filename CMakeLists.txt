@@ -40,6 +40,7 @@ add_executable(NEN
     src/registers.cpp
     src/flash.cpp
     src/CAN_module.cpp
+    src/OLED_module.cpp
     
     # Library executables
     # MCP2515
