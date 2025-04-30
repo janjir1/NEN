@@ -430,6 +430,11 @@ can be forced to write not fullz complete buffer to flash
 
 void flash_write(const void* data, uint8_t data_size, bool write_all) {
 
+    if (write_all == true){
+        memset(buffer + position, 0, buffer_size - position);
+        position = buffer_size;
+    }
+
     if (position + data_size >= buffer_size){
         for(uint8_t i = 0; i<buffer_size; i+= FLASH_PAGE_SIZE){
 
@@ -438,31 +443,24 @@ void flash_write(const void* data, uint8_t data_size, bool write_all) {
 
             const uint8_t* data_ptr = &buffer[i];
             printf("Writing to adr: 0x%08X\n", (unsigned int)flash_addr);
-            //__not_in_flash_func(flash_writer_process(flash_addr, &data_ptr));
-            __not_in_flash_func(flash_range_program(flash_addr, data_ptr, FLASH_PAGE_SIZE));
 
-            // check for memory overflow
+            uint32_t interrupts = save_and_disable_interrupts();
+            __not_in_flash_func(flash_range_program(flash_addr, data_ptr, FLASH_PAGE_SIZE));
+            restore_interrupts(interrupts); 
 
             flash_addr += FLASH_PAGE_SIZE;
 
         }
 
+        memset(buffer, 1, buffer_size);
+        position = 0;
+    }
+
+
     // Copy values into the buffer
     memcpy(buffer + position, data, data_size);
     position += data_size;
 
-    // Force folowing condition to be true, rest of array should be 1
-    if (write_all == true){
-        memset(buffer + position, 1, sizeof(buffer) - position);
-        position = sizeof(buffer);
-    }
-
-    // Write buffer to flash
-    
-
-        //Clear buffer
-        memset(buffer, 1, sizeof(buffer));
-        position = 0;
     }
     
 }
@@ -472,19 +470,14 @@ void flash_write(const void* data, uint8_t data_size, bool write_all) {
 writes rest of flash_write buffer to flash
 adds end position to last sector
 */
-/*
+
 void flash_end(){
 
-    flash_write(0, {0}, true); // set to 0 for recognizable end
+    uint8_t empty_data = 0;
+    flash_write(&empty_data, 8, true);
 
-    uint8_t buffer[32];
-    memset(buffer, 0x00, sizeof(buffer));
-    memcpy(buffer, &flash_addr, sizeof(flash_addr));
-
-    const uint8_t *data_ptr = buffer;
-    __not_in_flash_func(flash_writer_process(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE + 256, &data_ptr));
 }
-*/
+
 
 
 
