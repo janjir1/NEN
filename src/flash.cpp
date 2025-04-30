@@ -5,119 +5,12 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/regs/addressmap.h"
-
-/*
-uint32_t *pico_flash_read(long int FLASH_TARGET_OFFSET, size_t len) 
-{
-    const uint32_t *flash_target_contents = (const uint32_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
-    uint32_t *stored_value = (uint32_t*)calloc(len, sizeof(uint32_t));
-
-    for (size_t i = 0; i < len; ++i)
-    {
-        printf("\n STORED VALUE : %d\n", flash_target_contents[i]);
-        stored_value[i] = flash_target_contents[i];
-    }
-
-    return stored_value;                                                                                //++ Returns the pointer pointing to the array
-}
-
-void pico_flash_erase(long int FLASH_TARGET_OFFSET)
-{
-    uint8_t *stored_value = 0;
-    uint32_t interrupts = save_and_disable_interrupts();
-    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-
-    printf("\n ERASING FLASH MEMORY......\n");
-
-    flash_range_program(FLASH_TARGET_OFFSET, stored_value, FLASH_PAGE_SIZE);
-    restore_interrupts(interrupts);   
-}
-
-void pico_flash_write(long int FLASH_TARGET_OFFSET, uint8_t flash_data[], size_t num)
-{
-    const uint8_t *flash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
-    uint32_t *stored_value = (uint32_t*)malloc(num + 1);
-
-    uint32_t interrupts = save_and_disable_interrupts();
-    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-
-    printf("\n PROGRAMMING FLASH MEMORY......\n");
-
-    flash_range_program(FLASH_TARGET_OFFSET, flash_data, FLASH_PAGE_SIZE);
-    restore_interrupts(interrupts);
-}
-
-void pico_flash_write2(uint32_t flash_offset, const uint8_t flash_data[], size_t num) {
-    // Check that num is exactly FLASH_PAGE_SIZE for this simple example:
-    if (num != FLASH_PAGE_SIZE) {
-        printf("Error: num must be %d bytes\n", FLASH_PAGE_SIZE);
-        return;
-    }
-
-    // Disable interrupts for flash programming operations
-    uint32_t interrupts = save_and_disable_interrupts();
-
-    // Erase the entire sector at flash_offset
-    flash_range_erase(flash_offset, FLASH_SECTOR_SIZE);
-    printf("\n PROGRAMMING FLASH MEMORY......\n");
-
-    // Write one page (256 bytes) from flash_data into flash at flash_offset
-    flash_range_program(flash_offset, flash_data, num);
-
-    // Re-enable interrupts
-    restore_interrupts(interrupts);
-
-}
-
-
-
-Writes to flash
-Disable interupts
-gets FLASH_PAGE_SIZE data and adress
-
-void flash_writer_process(uint32_t addr, const uint8_t *data[]) {
-
-
-    uint32_t interrupts = save_and_disable_interrupts();
-
-    flash_range_program(addr, (uint8_t *)data, FLASH_PAGE_SIZE);
-
-    restore_interrupts(interrupts);
-
-    
-        
-    int buf[FLASH_PAGE_SIZE/sizeof(int)];  // One page worth of 32-bit ints
-    int mydata = 123456;  // The data I want to store
-
-    buf[0] = mydata;  // Put the data into the first four bytes of buf[]
-
-    // Erase the last sector of the flash
-        
-
-        //flash_range_erase((PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE), FLASH_SECTOR_SIZE);
-
-    // Program buf[] into the first page of this sector
-    ///flash_range_program((PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE), (uint8_t *)data, FLASH_PAGE_SIZE);
-
-}
-*/
-
-
-
-/*
-reads last sector where should be saved absolute position where data was saved last time (leveling purpouses)
-checks if sector is already set all to 1, if not erase the sector (lower wear)
-set flash_write buffer size multiple of 256 (check it)
-rewrites to last sector begining adress, where is overflow begin
-
-last sector frame: 32 bit beginig, 32 bit overflow begin, 192 bit empty (must write in 1 page chunks), 32 bit end
-
-*/
+#include "malloc.h"
+#include "src/flash.hpp"
 
 #define MAX_BUFFER_SIZE 10 * FLASH_PAGE_SIZE // max 2.560kB
 extern char __flash_binary_end;
 uint32_t last_sector_begin;
-//uint8_t buffer[96];
 uint8_t *buffer = NULL;
 uint32_t buffer_size = 0;
 uint32_t position = 0;
@@ -177,10 +70,10 @@ bool is_flash_erased(const uint8_t *memory_block, uint32_t size) {
 uint32_t last_sector_leveling(bool erase_all){
 
     // Loop over the flash pages in the sector.
-    // The loop iterates in steps of 2 pages, leaving space for 2 pages at a time.
+    // The loop iterates in steps of 1 page
     for (uint8_t i = 0; i <= FLASH_SECTOR_SIZE/FLASH_PAGE_SIZE-1; i+=1) {
 
-        //printf("leveling_i: %d\n", i);
+        printf("leveling_i: %d\n", i);
 
         const uint8_t *addr = (const uint8_t *)(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE + XIP_BASE + (i * FLASH_PAGE_SIZE));
 
@@ -249,6 +142,46 @@ uint32_t greatest_common_divisor(uint32_t a, uint32_t b) {
     return a;
 }
 
+uint32_t find_last_EOF(uint32_t start){
+
+    // Loop over the flash pages in the sector.
+    // The loop iterates in steps of 1 page
+    for (uint32_t i = start; i <= PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE; i+=FLASH_SECTOR_SIZE) {
+
+        printf("finding start: 0x%x\n", i);
+
+        const uint8_t *addr = (const uint8_t *)(i + XIP_BASE);
+
+         // Check if the current flash page is completely erased (i.e. all 0xFF)
+        if (is_flash_erased(addr, FLASH_PAGE_SIZE)) {
+
+            // Return the absolute address (XIP_BASE excluded) at which new data can be written
+            return i; 
+
+        }
+    }
+
+    printf("Not found until end of flash\n");
+
+    for (uint32_t i = 0; i <= start; i+=FLASH_SECTOR_SIZE) {
+
+        printf("finding start: 0x%x\n", i);
+
+        const uint8_t *addr = (const uint8_t *)(i + XIP_BASE);
+
+         // Check if the current flash page is completely erased (i.e. all 0xFF)
+        if (is_flash_erased(addr, FLASH_PAGE_SIZE)) {
+
+            // Return the absolute address (XIP_BASE excluded) at which new data can be written
+            return i; 
+
+        }
+    }
+
+    return UINT32_MAX;
+
+}
+
 
 /*
  * Function: flash_init
@@ -306,10 +239,6 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
         printf("Memory allocation failed\n");
         return UINT32_MAX;
     }
-        
-
-    // Read a flash word from a fixed location (2 pages before the end), important for last sector erasing. If first init then random value should be ok
-    flash_addr = read_flash(PICO_FLASH_SIZE_BYTES - FLASH_PAGE_SIZE);
 
     //Get the beginning offset (excluding XIP_BASE) of the last flash sector
     //If there is no more space in header sector and erase all is disabled then will return 0 as there is no free space to write new file
@@ -324,9 +253,10 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
     // before the sector's beginning relative to the whole flash size,
     // then re-read flash_addr from a lower position.
 
-    if (!((last_sector_begin - FLASH_PAGE_SIZE)<(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE))){
-        flash_addr = read_flash(last_sector_begin - FLASH_PAGE_SIZE);
-    }
+    uint32_t start = read_flash(last_sector_begin - FLASH_PAGE_SIZE);
+    printf("looking for free space begin 0x%x\n", last_sector_begin);
+    flash_addr = find_last_EOF(start);
+
 
     printf("Flash begin: 0x%08X\n", flash_addr);
  
@@ -427,19 +357,46 @@ can be forced to write not fullz complete buffer to flash
 
 
 // how to use flash_write(&value16, sizeof(value16), false);
-
-void flash_write(const void* data, uint8_t data_size, bool write_all) {
+/*
+ * Function: flash_write
+ * --------------------
+ * Writes data to a buffer and, when the buffer is full, programs it to flash memory.
+ * The function implements a circular buffer that automatically wraps around to a
+ * designated overflow area when reaching the end of the flash memory.
+ *
+ * Arguments:
+ *   data - Pointer to the data that needs to be written to flash.
+ *   data_size - Size of the data in bytes.
+ *   write_all - If true, fills the rest of the buffer with zeros and forces a write
+ *               operation regardless of buffer fullness.
+ *
+ * Returns:
+ *   true if all flash write operations were successful, false if any verification failed.
+ *
+ * Notes:
+ *   - The function uses global buffer, position, and flash_addr variables that must be
+ *     initialized before calling this function.
+ *   - Interrupts are disabled during the actual flash programming to ensure timing
+ *     requirements are met.
+ *   - Each write operation is verified by comparing the flash contents with the source data.
+ */
+bool flash_write(const void* data, uint8_t data_size, bool write_all) {
 
     if (write_all == true){
         memset(buffer + position, 0, buffer_size - position);
         position = buffer_size;
     }
 
+    bool pass = true;
+
     if (position + data_size >= buffer_size){
-        for(uint8_t i = 0; i<buffer_size; i+= FLASH_PAGE_SIZE){
+        for(uint32_t i = 0; i<buffer_size; i+= FLASH_PAGE_SIZE){
+
+            printf("writing data %d\n", i);
 
             if (flash_addr + FLASH_PAGE_SIZE >= PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE){
                 flash_addr = flash_overflow_begin;
+            }
 
             const uint8_t* data_ptr = &buffer[i];
             printf("Writing to adr: 0x%08X\n", (unsigned int)flash_addr);
@@ -448,37 +405,50 @@ void flash_write(const void* data, uint8_t data_size, bool write_all) {
             __not_in_flash_func(flash_range_program(flash_addr, data_ptr, FLASH_PAGE_SIZE));
             restore_interrupts(interrupts); 
 
+            // check if it was written correctly
+            uint8_t *flash_ptr = (uint8_t *)(XIP_BASE + flash_addr);
+            if (memcmp(flash_ptr, data_ptr, FLASH_PAGE_SIZE) != 0){
+                pass = false;
+            }
+
             flash_addr += FLASH_PAGE_SIZE;
 
         }
 
-        memset(buffer, 1, buffer_size);
+        memset(buffer, 0xFF, buffer_size);
         position = 0;
-    }
+        
 
+    }
 
     // Copy values into the buffer
     memcpy(buffer + position, data, data_size);
     position += data_size;
 
-    }
+    return pass;
     
 }
 
 
 /*
-writes rest of flash_write buffer to flash
-adds end position to last sector
-*/
-
-void flash_end(){
+ * Function: flash_end
+ * -------------------
+ * Finalizes the flash writing process by forcing a final write of the buffer to flash memory.
+ * This is typically used to ensure that any remaining unwritten data in the buffer is flushed
+ * to flash, even if the buffer is not full.
+ *
+ * Arguments:
+ *   None.
+ *
+ * Returns:
+ *   true if the final flash write operation was successful, false otherwise.
+ */
+bool flash_end(void){
 
     uint8_t empty_data = 0;
-    flash_write(&empty_data, 8, true);
+    bool pass = flash_write(&empty_data, 8, true);
+    free(buffer);
+    
+    return pass;
 
 }
-
-
-
-
-

@@ -25,7 +25,7 @@ typedef struct {
     uint8_t pid;
     uint32_t time;
     const char* name;  // pointer to static string
-    uint16_t value;    // decoded value
+    int16_t value;    // decoded value
     const char* unit;  // pointer to static string
 } Result;
 
