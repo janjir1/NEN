@@ -24,14 +24,47 @@ struct can_frame rxMsg;
 int main() {
     stdio_init_all();
     
-	//myOLED_init(I2C_ADDR, I2C_SPEED, I2C_CLK_PIN, I2C_DATA_PIN, I2C_RESET_PIN);
-
+	// ==== OLED Init ====
 	myOLED_init(); // Initialize the OLED display
+	/*
+	// ==== OLED Example ====
+	Result res1;
+	res1.name = "Test";
+	res1.value = -123;
+	res1.unit = "unit";
+
+	Result res2;
+	res2.name = "Test2test";
+	res2.value = 10788;
+	res2.unit = "u/gC%^";
+
+	Result throttle;
+	throttle.name = "Throttle";
+	throttle.value = 0;
+	throttle.unit = "%";
+
+	Result rpm;
+	rpm.name = "RPM";
+	rpm.value = 0;
+	rpm.unit = "rpm";
+	
+	myOLED_result(&res1, &throttle, &rpm);
+	sleep_ms(2000);
+	myOLED_result(&res2, &throttle, &rpm);
+	sleep_ms(2000);
+
+	for (int16_t i = 0; i < 100; i++)
+	{
+		throttle.value = i;
+		rpm.value = i * 60;
+		myOLED_result(&res2, &throttle, &rpm);
+		sleep_ms(2);
+	}*/
 	
 
 	sleep_ms(10000);
 
-	bool post_pass = mcp_2515_init(CAN_500KBPS, MCP_8MHZ, SPI_PORT, PIN_CS, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_BAUDRATE);
+	bool post_pass = mcp_2515_init(CAN_500KBPS, MCP_8MHZ, MY_SPI_PORT, MY_PIN_CS, MY_PIN_MOSI, MY_PIN_MISO, MY_PIN_SCK, MY_SPI_BAUDRATE);
 
 	if (!post_pass){
 		while(true){
