@@ -1,0 +1,65 @@
+.program read_pin
+    ; Determine initial pin state
+    jmp pin, isone      ; If pin is 1, jump to isone
+    
+iszero:
+    ; Pin is currently 0, wait for it to go to 1
+    wait 1 pin 0        ; Wait for pin to go high
+    
+    ; Debounce the transition to 1
+    set x, 31           ; Set debounce counter
+loop_to_one:
+    jmp pin, still_one  ; If pin is still 1, continue debounce
+    jmp iszero          ; Pin went back to 0, restart
+still_one:
+    jmp x--, loop_to_one ; Decrement counter, loop if not zero
+    
+    ; Pin has stably transitioned to 1
+    in pins, 1          ; Read pin state (should be 1)
+    ; Fall through to isone
+    
+isone:
+    ; Pin is currently 1, wait for it to go to 0
+    wait 0 pin 0        ; Wait for pin to go low
+    
+    ; Debounce the transition to 0
+    set x, 31           ; Set debounce counter
+loop_to_zero:
+    jmp pin, isone      ; Pin went back to 1, restart
+    ; Pin is still 0, continue debounce
+    jmp x--, loop_to_zero ; Decrement counter, loop if not zero
+    
+    ; Pin has stably transitioned to 0
+    in pins, 1          ; Read pin state (should be 0)
+    jmp iszero          ; Go back to waiting for 1
+
+% c-sdk {
+static inline void read_pin_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = read_pin_program_get_default_config(offset);
+    
+    // Set the IN pin and JMP pin to the same pin
+    sm_config_set_in_pins(&c, pin);
+    sm_config_set_jmp_pin(&c, pin);
+    
+    // Set the pin direction to input at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+    
+    // Connect the GPIO to this PIO block
+    pio_gpio_init(pio, pin);
+    
+    // Configure input shifting with autopush
+    sm_config_set_in_shift(
+        &c,
+        false,  // Shift to left
+        true,   // Autopush enabled
+        1       // Autopush threshold = 1 bit
+    );
+    
+    // We only receive, so disable the TX FIFO to make the RX FIFO deeper
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    
+    // Load our configuration, and start the program from the beginning
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

@@ -2,8 +2,8 @@
 
 // =============== Defines =========================
 // GPIO Defines
-#define LED_pin 25
-#define BTN_pin 24
+#define LED_PIN 25
+#define BTN_PIN 24
 #define NEOPIXEL_pin 23
 
 // SPI Settings
@@ -28,3 +28,6 @@ extern uint8_t screenBuffer[FULLSCREEN/8];
 #define I2C_CLK_PIN     15
 #define I2C_DATA_PIN    14
 #define I2C_RESET_PIN   -1      // set to -1 if not used
+
+
+
