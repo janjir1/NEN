@@ -210,3 +210,22 @@ void TestLoop()
 	uint8_t count = sizeof(sizes) / sizeof(sizes[0]);
 
 	uint32_t avalible = flash_init(sizes, count, false);
+
+//--------------------- PIO example -------------------------
+
+	printf("PIO pin reader example\n");
+
+	init_pio_button(pio, BTN_PIN);
+
+	gpio_init(LED_PIN);
+	gpio_set_dir(LED_PIN, GPIO_OUT);
+    
+    // Choose a pin to read
+    
+    // Main loop
+    while (true) {
+        // If there's data in the RX FIFO, read it
+		bool pressed = was_button_pressed(pio);
+		printf("Pin state: %d\n", pressed);
+		gpio_put(LED_PIN, pressed);
+	}

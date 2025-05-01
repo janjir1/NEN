@@ -6,7 +6,7 @@
 #include "hardware/sync.h"
 #include "hardware/regs/addressmap.h"
 #include "malloc.h"
-#include "src/flash.hpp"
+#include "flash.hpp"
 
 #define MAX_BUFFER_SIZE 10 * FLASH_PAGE_SIZE // max 2.560kB
 extern char __flash_binary_end;

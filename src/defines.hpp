@@ -5,8 +5,8 @@
 
 // ================= Defines =====================
 // GPIO Defines
-#define LED_pin 25
-#define BTN_pin 24
+#define LED_PIN 25
+#define BTN_PIN 24
 #define NEOPIXEL_pin 23
 
 // SPI Settings
