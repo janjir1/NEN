@@ -343,7 +343,7 @@ uint32_t flash_init(uint32_t sizes[], uint8_t count, bool erase_all) {
 
     printf("Init finished\n");
 
-    return space_avalible;
+    return space_avalible/1000;
 }
 
 /*

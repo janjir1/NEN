@@ -307,6 +307,6 @@ bool get_decoded_data(uint8_t pid, Result* out){
             return true;
         }
     }
-    printf("Get_decoded_data FAILED");
+    printf("Get_decoded_data FAILED: ");
     return false;
 }

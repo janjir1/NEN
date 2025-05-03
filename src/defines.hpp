@@ -32,3 +32,6 @@
 #define I2C_CLK_PIN     15
 #define I2C_DATA_PIN    14
 #define I2C_RESET_PIN   (-1)      // set to -1 if not used
+
+//main
+#define POLL_PERIOD_MS 100
