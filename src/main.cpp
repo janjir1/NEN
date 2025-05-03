@@ -26,7 +26,7 @@ int main() {
     
 	// ==== OLED Init ====
 	myOLED_init(); // Initialize the OLED display
-	/*
+	
 	// ==== OLED Example ====
 	Result res1;
 	res1.name = "Test";
@@ -59,7 +59,7 @@ int main() {
 		rpm.value = i * 60;
 		myOLED_result(&res2, &throttle, &rpm);
 		sleep_ms(2);
-	}*/
+	}
 	
 
 	sleep_ms(10000);

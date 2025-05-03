@@ -28,7 +28,7 @@
 // I2C Settings
 #define I2C_PORT i2c1
 #define I2C_ADDR        0x3C    // I2C address
-#define I2C_SPEED       2000     // I2C clock speed in kilo hertz
+#define I2C_SPEED       400     // I2C clock speed in kilo hertz
 #define I2C_CLK_PIN     15
 #define I2C_DATA_PIN    14
 #define I2C_RESET_PIN   (-1)      // set to -1 if not used
