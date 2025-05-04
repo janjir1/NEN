@@ -35,3 +35,4 @@
 
 //main
 #define POLL_PERIOD_MS 100
+#define WRITE_ERROR_MAX 18

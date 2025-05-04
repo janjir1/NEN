@@ -50,16 +50,10 @@ void flash_write_CAN(Result *out){
 
 
 int main() {
-
-	stdio_init_all();
-
-
 	// ==== Inits ====
-	
+	stdio_init_all();
 	myOLED_init(); // Initialize the OLED display
 	init_pio_button(pio, BTN_PIN);
-
-
 	bool post_pass = mcp_2515_init(CAN_500KBPS, MCP_8MHZ, MY_SPI_PORT, MY_PIN_CS, MY_PIN_MOSI, MY_PIN_MISO, MY_PIN_SCK, MY_SPI_BAUDRATE);
 
 	if (!post_pass){
@@ -95,16 +89,23 @@ int main() {
 	while(true){
 
 		if (record_init){
-			//TODO handle full/empty storage
+
 			uint32_t free_space = flash_init(sizes, count, clear_flash);
 			if(clear_flash) printf("Flash clear");
 			clear_flash = false;
 			record_init = false;
 			//print free avalible space to display
 			Result message;
-			message.name = "There is";
-			message.value = (int16_t)free_space;
-			message.unit = "kB";
+			if(free_space == UINT32_MAX){
+				message.name = "Flash init";
+				message.value = 0;
+				message.unit = "ERROR";
+			}
+			else{
+				message.name = "There is free";
+				message.value = (int16_t)free_space;
+				message.unit = "kB";
+			}
 			myOLED_result(&message, &throttle, &rpm);
 			sleep_ms(2000);
 			myOLED_result(&res, &throttle, &rpm);
@@ -198,11 +199,18 @@ int main() {
 
 		}
 		
-
-
-
-
-
+		if(write_error >= WRITE_ERROR_MAX){
+			record = false;
+			flash_end();
+			printf("Log end\n");
+			Result message;
+			message.name = "Log ended";
+			message.value = (uint16_t)write_error;
+			message.unit = "ERRORs";
+			myOLED_result(&message, &throttle, &rpm);
+			sleep_ms(2000);
+			myOLED_result(&res, &throttle, &rpm);
+		}
 			
 	}
 }
